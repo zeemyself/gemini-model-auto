@@ -1,38 +1,65 @@
 // content.js
 
-// CONFIGURATION
-const TARGET_MODEL_NAME = "Pro";
-const TARGET_MODEL_DESC = "Thinks longer"; // Helps confirm it's the high-reasoning model
+// Default Config
+let config = {
+  targetModelName: "Pro",
+  targetModelDesc: "Thinks longer",
+  modelSwitcherSelector: "button.mdc-button.mat-mdc-button-base.input-area-switch.mat-mdc-button.mat-unthemed.ng-star-inserted",
+  delay: 10
+};
 
-// Selector based on the specific class found in your HTML snippet
-const MODEL_SWITCHER_SELECTOR = "button.mdc-button.mat-mdc-button-base.input-area-switch.mat-mdc-button.mat-unthemed.ng-star-inserted";
+// Function to update config from storage
+function updateConfig(items) {
+  if (items.targetModelName) config.targetModelName = items.targetModelName;
+  if (items.targetModelDesc) config.targetModelDesc = items.targetModelDesc;
+  if (items.modelSwitcherSelector) config.modelSwitcherSelector = items.modelSwitcherSelector;
+  if (items.delay) config.delay = items.delay;
+}
 
-const DELAY = 10;
+// Initialize config from storage
+chrome.storage.sync.get(config, (items) => {
+  updateConfig(items);
+  // Start observing only after we have the initial config (optional, but good practice)
+  startObserver();
+});
+
+// Listen for changes in storage
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'sync') {
+    for (let key in changes) {
+      if (config.hasOwnProperty(key)) {
+        config[key] = changes[key].newValue;
+      }
+    }
+    console.log("Gemini Auto-Pro: Configuration updated.", config);
+  }
+});
 
 function switchModel() {
-  // 1. Find the button using the specific Angular class
-  const switcherButton = document.querySelector(MODEL_SWITCHER_SELECTOR);
+  // 1. Find the button using the specific configured selector
+  const switcherButton = document.querySelector(config.modelSwitcherSelector);
 
   if (!switcherButton) return;
 
-  // 2. Check if we are ALREADY on the Pro model
-  // We check the text inside the button. Your snippet showed <span>Pro</span> inside it.
-  if (switcherButton.innerText.includes(TARGET_MODEL_NAME)) {
-    // We are already on Pro, so we do nothing.
+  // 2. Check if we are ALREADY on the target model
+  // We check the text inside the button.
+  if (switcherButton.innerText.includes(config.targetModelName)) {
+    // We are already on the target model, so we do nothing.
     return;
   }
 
-  console.log("Gemini Auto-Pro: Detected different model. Switching to Pro...");
+  console.log(`Gemini Auto-Pro: Detected different model. Switching to ${config.targetModelName}...`);
 
   // 3. Open the Menu
   switcherButton.click();
 
-  // 4. Find and Click the specific "Pro" option in the dropdown
+  // 4. Find and Click the specific option in the dropdown
   setTimeout(() => {
     // We use a specific XPath to find the menu item text container directly
-    // This targets the specific span class seen in the logs, avoiding parent containers
+    const xpath = `//span[contains(@class, 'mat-mdc-menu-item-text') and contains(., '${config.targetModelName}') and contains(., '${config.targetModelDesc}')]`;
+    
     const menuItems = document.evaluate(
-      `//span[contains(@class, 'mat-mdc-menu-item-text') and contains(., '${TARGET_MODEL_NAME}') and contains(., '${TARGET_MODEL_DESC}')]`,
+      xpath,
       document,
       null,
       XPathResult.ORDERED_NODE_SNAPSHOT_TYPE,
@@ -44,23 +71,28 @@ function switchModel() {
     if (menuItems.snapshotLength > 0) {
       // Click the matching menu item directly
       menuItems.snapshotItem(0).click();
-      console.log("Gemini Auto-Pro: Switched to Pro.");
+      console.log(`Gemini Auto-Pro: Switched to ${config.targetModelName}.`);
     } else {
-      console.log("Gemini Auto-Pro: Could not find 'Pro' model in menu.");
+      console.log(`Gemini Auto-Pro: Could not find '${config.targetModelName}' model in menu.`);
       // Optional: Close the menu if we failed so it doesn't block the screen
       switcherButton.click(); 
     }
-  }, DELAY); // 500ms delay to let the menu animation finish
+  }, config.delay); 
 }
 
 // 5. Run loop to watch for page changes
-// Since Gemini is a "Single Page App", the button might re-appear or change text without a reload.
 let switchTimeout;
-const observer = new MutationObserver((mutations) => {
-  clearTimeout(switchTimeout);
-  // We wait 1.5 seconds after page activity to let elements settle before checking
-  switchTimeout = setTimeout(switchModel, DELAY); 
-});
+let observer;
 
-// Start observing the page
-observer.observe(document.body, { childList: true, subtree: true });
+function startObserver() {
+  if (observer) return; // Already started
+
+  observer = new MutationObserver((mutations) => {
+    clearTimeout(switchTimeout);
+    // We wait a bit after page activity to let elements settle before checking
+    switchTimeout = setTimeout(switchModel, config.delay); 
+  });
+
+  // Start observing the page
+  observer.observe(document.body, { childList: true, subtree: true });
+}

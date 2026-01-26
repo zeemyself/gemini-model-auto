@@ -3,7 +3,10 @@
   "name": "Gemini Auto-Pro Switcher",
   "version": "1.0",
   "description": "Automatically switches Gemini to the Advanced/Pro model.",
-  "permissions": ["scripting"],
+  "permissions": ["scripting", "storage"],
+  "action": {
+    "default_popup": "popup.html"
+  },
   "host_permissions": ["https://gemini.google.com/*"],
   "content_scripts": [
     {
