@@ -5,7 +5,7 @@ const TARGET_MODEL_NAME = "Pro";
 const TARGET_MODEL_DESC = "Thinks longer"; // Helps confirm it's the high-reasoning model
 
 // Selector based on the specific class found in your HTML snippet
-const MODEL_SWITCHER_SELECTOR = "button.input-area-switch";
+const MODEL_SWITCHER_SELECTOR = "button.mdc-button.mat-mdc-button-base.input-area-switch.mat-mdc-button.mat-unthemed.ng-star-inserted";
 
 const DELAY = 10;
 
