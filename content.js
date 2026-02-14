@@ -35,6 +35,34 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   }
 });
 
+const PROMPT_INPUT_SELECTORS = [
+  "rich-textarea .ql-editor[contenteditable='true']",
+  ".ql-editor[contenteditable='true'][role='textbox']",
+  "div[contenteditable='true'][aria-label*='prompt']",
+  "textarea[aria-label*='prompt']"
+];
+
+function getPromptInput() {
+  for (const selector of PROMPT_INPUT_SELECTORS) {
+    const input = document.querySelector(selector);
+    if (input) return input;
+  }
+  return null;
+}
+
+function focusPromptInput(retryCount = 0) {
+  const input = getPromptInput();
+
+  if (input) {
+    input.focus({ preventScroll: true });
+    return;
+  }
+
+  if (retryCount < 8) {
+    setTimeout(() => focusPromptInput(retryCount + 1), 50);
+  }
+}
+
 function switchModel() {
   // 1. Find the button using the specific configured selector
   const switcherButton = document.querySelector(config.modelSwitcherSelector);
@@ -72,10 +100,12 @@ function switchModel() {
       // Click the matching menu item directly
       menuItems.snapshotItem(0).click();
       console.log(`Gemini Auto-Pro: Switched to ${config.targetModelName}.`);
+      setTimeout(() => focusPromptInput(), config.delay);
     } else {
       console.log(`Gemini Auto-Pro: Could not find '${config.targetModelName}' model in menu.`);
       // Optional: Close the menu if we failed so it doesn't block the screen
-      switcherButton.click(); 
+      switcherButton.click();
+      setTimeout(() => focusPromptInput(), config.delay);
     }
   }, config.delay); 
 }
