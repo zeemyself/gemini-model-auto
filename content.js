@@ -2,14 +2,16 @@
 
 // Default Config
 let config = {
+  enabled: true,
   targetModelName: "Pro",
-  targetModelDesc: "Thinks longer",
+  targetModelDesc: "Advanced math and code with 3.1 Pro",
   modelSwitcherSelector: "button.mdc-button.mat-mdc-button-base.input-area-switch.mat-mdc-button.mat-unthemed.ng-star-inserted",
   delay: 10
 };
 
 // Function to update config from storage
 function updateConfig(items) {
+  if (items.enabled !== undefined) config.enabled = items.enabled;
   if (items.targetModelName) config.targetModelName = items.targetModelName;
   if (items.targetModelDesc) config.targetModelDesc = items.targetModelDesc;
   if (items.modelSwitcherSelector) config.modelSwitcherSelector = items.modelSwitcherSelector;
@@ -32,6 +34,14 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
       }
     }
     console.log("Gemini Auto-Pro: Configuration updated.", config);
+    if (changes.enabled !== undefined) {
+      if (!changes.enabled.newValue) {
+        console.log("Gemini Auto-Pro: Extension disabled.");
+      } else {
+        console.log("Gemini Auto-Pro: Extension enabled.");
+        switchModel();
+      }
+    }
   }
 });
 
@@ -64,6 +74,8 @@ function focusPromptInput(retryCount = 0) {
 }
 
 function switchModel() {
+  if (!config.enabled) return;
+
   // 1. Find the button using the specific configured selector
   const switcherButton = document.querySelector(config.modelSwitcherSelector);
 
