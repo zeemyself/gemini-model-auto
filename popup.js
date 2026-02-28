@@ -84,7 +84,10 @@ const updateStatusBadge = (enabled) => {
   const badgeText = document.querySelector(".footer-badge span:last-child");
   const badgeDot = document.querySelector(".footer-badge .dot");
   badgeText.textContent = enabled ? "Extension Active" : "Extension Disabled";
-  badgeDot.style.background = enabled ? "var(--success)" : "var(--text-muted)";
+  badgeDot.style.backgroundColor = enabled ? "var(--good, #16a34a)" : "var(--danger, #ef4444)";
+  badgeDot.style.boxShadow = enabled
+    ? "0 0 0 4px rgba(22, 163, 74, 0.18)"
+    : "0 0 0 4px rgba(239, 68, 68, 0.22)";
 };
 
 const showStatus = (message = "Settings Saved!") => {
