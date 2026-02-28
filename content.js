@@ -125,6 +125,15 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
         config[key] = changes[key].newValue;
       }
     }
+
+    if (
+      changes.modelPreset !== undefined ||
+      changes.targetModelName !== undefined ||
+      changes.targetModelDesc !== undefined
+    ) {
+      clearRateLimitBlock("target model settings changed");
+    }
+
     console.log("Gemini Auto-Pro: Configuration updated.", config);
     if (changes.enabled !== undefined) {
       if (!changes.enabled.newValue) {
@@ -165,11 +174,23 @@ function focusPromptInput(retryCount = 0) {
   }
 }
 
+let rateLimitBlock = null;
+
+function clearRateLimitBlock(reason) {
+  if (!rateLimitBlock) return;
+  console.log(`Gemini Auto-Pro: Clearing rate-limit block (${reason}).`);
+  rateLimitBlock = null;
+}
+
 function switchModel() {
   if (!config.enabled) return;
   const targetName = (config.targetModelName || "").trim();
   const targetDesc = (config.targetModelDesc || "").trim();
   if (!targetName) return;
+
+  if (rateLimitBlock && rateLimitBlock.modelName === targetName) {
+    return;
+  }
 
   // 1. Find the button using the specific configured selector
   const switcherButton = getSwitcherButton();
@@ -191,10 +212,34 @@ function switchModel() {
 
   // 4. Find and Click the specific option in the dropdown
   setTimeout(() => {
-    const menuItem = findBestMenuItem(targetName, targetDesc);
+    const menuMatch = findBestMenuItem(targetName, targetDesc);
 
-    if (menuItem) {
-      const clickableMenuItem = menuItem.closest("button,[role='menuitem']") || menuItem;
+    if (menuMatch && isRateLimitedDescription(menuMatch.descriptionText)) {
+      const shouldLog = (
+        !rateLimitBlock ||
+        rateLimitBlock.modelName !== targetName ||
+        rateLimitBlock.descriptionText !== menuMatch.descriptionText
+      );
+
+      rateLimitBlock = {
+        modelName: targetName,
+        descriptionText: menuMatch.descriptionText
+      };
+
+      if (shouldLog) {
+        console.log(
+          `Gemini Auto-Pro: '${targetName}' appears rate-limited (${menuMatch.descriptionText}). Auto-switch stopped for this model until target settings change.`
+        );
+      }
+
+      // Close menu while blocked so it does not obstruct the page.
+      switcherButton.click();
+      setTimeout(() => focusPromptInput(), config.delay);
+      return;
+    }
+
+    if (menuMatch) {
+      const clickableMenuItem = menuMatch.menuItem.closest("button,[role='menuitem']") || menuMatch.menuItem;
       clickableMenuItem.click();
       console.log(`Gemini Auto-Pro: Switched to ${targetName}.`);
       setTimeout(() => focusPromptInput(), config.delay);
@@ -239,6 +284,39 @@ function findMenuItemByXPath(xpath) {
   return results.snapshotItem(0);
 }
 
+function normalizeMenuText(value) {
+  return (value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractDescriptionText(menuItem, targetName) {
+  const rawText = (menuItem && (menuItem.innerText || menuItem.textContent)) || "";
+  const lines = rawText
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length > 1) {
+    return normalizeMenuText(lines.slice(1).join(" "));
+  }
+
+  const singleLine = lines[0] || "";
+  const lowerLine = singleLine.toLowerCase();
+  const lowerName = (targetName || "").trim().toLowerCase();
+
+  if (lowerName && lowerLine.startsWith(lowerName)) {
+    return normalizeMenuText(singleLine.slice(targetName.length));
+  }
+
+  return normalizeMenuText(singleLine);
+}
+
+function isRateLimitedDescription(descriptionText) {
+  return (descriptionText || "").trimStart().toLowerCase().startsWith("limit");
+}
+
 function findBestMenuItem(targetName, targetDesc) {
   const escapedName = escapeXPathValue(targetName);
   const escapedDesc = targetDesc ? escapeXPathValue(targetDesc) : null;
@@ -247,12 +325,25 @@ function findBestMenuItem(targetName, targetDesc) {
   if (escapedDesc) {
     const fullMatchXpath = `//span[contains(@class, 'mat-mdc-menu-item-text') and contains(., ${escapedName}) and contains(., ${escapedDesc})]`;
     const fullMatch = findMenuItemByXPath(fullMatchXpath);
-    if (fullMatch) return fullMatch;
+    if (fullMatch) {
+      return {
+        menuItem: fullMatch,
+        descriptionText: extractDescriptionText(fullMatch, targetName),
+        matchType: "name+desc"
+      };
+    }
   }
 
   // Fallback to name-only if Gemini description text changed.
   const nameOnlyXpath = `//span[contains(@class, 'mat-mdc-menu-item-text') and contains(., ${escapedName})]`;
-  return findMenuItemByXPath(nameOnlyXpath);
+  const nameOnlyMatch = findMenuItemByXPath(nameOnlyXpath);
+  if (!nameOnlyMatch) return null;
+
+  return {
+    menuItem: nameOnlyMatch,
+    descriptionText: extractDescriptionText(nameOnlyMatch, targetName),
+    matchType: "name-only"
+  };
 }
 
 // 5. Run loop to watch for page changes
